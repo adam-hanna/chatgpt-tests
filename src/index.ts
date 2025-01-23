@@ -5,6 +5,10 @@ import ts from 'typescript';
 
 import OpenAI from 'openai';
 
+// Parse command-line arguments
+const args = process.argv.slice(2); // Exclude `node` and script path
+const inputDir = args[0]; // Assume the first argument is the directory
+
 type ChatCompletionRequestMessage = {
     role: 'system' | 'user' | 'assistant';
     content: string;
@@ -29,23 +33,110 @@ function getFilesRecursively(dir: string): string[] {
 }
 
 // Parse a file and extract functions
-function extractFunctionsUsingTS(filePath: string): { name: string; code: string }[] {
+function extractFunctionsUsingTS(filePath: string): { name: string; code: string; exported: boolean }[] {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const sourceFile = ts.createSourceFile(filePath, fileContent, ts.ScriptTarget.ESNext, true);
 
-    const functions: { name: string; code: string }[] = [];
+    const functions: { name: string; code: string; exported: boolean }[] = [];
+
+    function isExported(node: ts.Node): boolean {
+        if (
+            ts.isFunctionDeclaration(node) ||
+            ts.isClassDeclaration(node) ||
+            ts.isInterfaceDeclaration(node) ||
+            ts.isEnumDeclaration(node) ||
+            ts.isVariableStatement(node)
+        ) {
+            return node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword) || false;
+        }
+        return false;
+    }
 
     function visit(node: ts.Node) {
         if (ts.isFunctionDeclaration(node) && node.name) {
+            // Handle named function declarations
             const functionName = node.name.getText();
             const functionCode = fileContent.substring(node.pos, node.end);
-            functions.push({ name: functionName, code: functionCode });
-        } else if (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
-            const functionName = node.parent && ts.isVariableDeclaration(node.parent)
-                ? node.parent.name.getText()
-                : 'anonymous';
+            const exported = isExported(node);
+    
+            functions.push({ name: functionName, code: functionCode, exported });
+        } else if (ts.isVariableStatement(node)) {
+            // Handle VariableStatements (e.g., export const c = ...)
+            const exported = isExported(node); // Check if the VariableStatement is exported
+    
+            for (const declaration of node.declarationList.declarations) {
+                if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
+                    const functionName = declaration.name.getText();
+    
+                    // Check if the initializer is a function
+                    if (
+                        declaration.initializer && // Ensure initializer is defined
+                        (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))
+                    ) {
+                        const functionCode = fileContent.substring(declaration.initializer.pos, declaration.initializer.end);
+                        functions.push({ name: functionName, code: functionCode, exported });
+                    }
+                }
+            }
+        }
+    
+        ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
+    return functions;
+}
+
+/*
+function extractFunctionsUsingTS(filePath: string): { name: string; code: string; exported: boolean; defaultExport: boolean }[] {
+    const fileContent = fs.readFileSync(filePath, 'utf-8');
+    const sourceFile = ts.createSourceFile(filePath, fileContent, ts.ScriptTarget.ESNext, true);
+
+    const functions: { name: string; code: string; exported: boolean; defaultExport: boolean }[] = [];
+
+    function isExported(node: ts.Node): boolean {
+        if (
+            ts.isFunctionDeclaration(node) ||
+            ts.isClassDeclaration(node) ||
+            ts.isInterfaceDeclaration(node) ||
+            ts.isEnumDeclaration(node) ||
+            ts.isVariableStatement(node)
+        ) {
+            return node.modifiers?.some(
+                modifier => modifier.kind === ts.SyntaxKind.ExportKeyword || modifier.kind === ts.SyntaxKind.DefaultKeyword
+            ) || false;
+        }
+        return false;
+    }
+
+    function isDefaultExport(node: ts.Node): boolean {
+        return node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword) || false;
+    }
+
+    function visit(node: ts.Node) {
+        if (ts.isExportDeclaration(node)) return; // Skip re-exports
+        if (node.parent && ts.isBlock(node.parent)) return; // Skip nested functions
+
+        // Handle named and anonymous FunctionDeclarations
+        if (ts.isFunctionDeclaration(node)) {
+            const functionName = node.name?.getText() || 'defaultExport';
             const functionCode = fileContent.substring(node.pos, node.end);
-            functions.push({ name: functionName, code: functionCode });
+            const exported = isExported(node);
+            const isDefault = isDefaultExport(node);
+
+            functions.push({ name: functionName, code: functionCode, exported, defaultExport: isDefault });
+        }
+
+        // Handle FunctionExpression or ArrowFunction inside VariableDeclaration
+        else if ((ts.isFunctionExpression(node) || ts.isArrowFunction(node)) && ts.isVariableDeclaration(node.parent)) {
+            const functionName = node.parent.name.getText();
+            const functionCode = fileContent.substring(node.pos, node.end);
+            const exported =
+                ts.isVariableStatement(node.parent.parent) && isExported(node.parent.parent);
+            const isDefault =
+                ts.isVariableStatement(node.parent.parent) && isDefaultExport(node.parent.parent);
+
+            functions.push({ name: functionName, code: functionCode, exported, defaultExport: isDefault });
         }
 
         ts.forEachChild(node, visit);
@@ -54,6 +145,7 @@ function extractFunctionsUsingTS(filePath: string): { name: string; code: string
     visit(sourceFile);
     return functions;
 }
+*/
 
 function extractCodeBlocks(response: string): string[] {
     const codeBlockRegex = /```(?:javascript|typescript)?\n([\s\S]*?)```/g;
@@ -149,10 +241,17 @@ function runTests(testFilePath: string): Promise<{ success: boolean; results: st
 
 (async () => {
     const maxTries = 10;
-    const files = getFilesRecursively('./src/files-for-test');
+    const files = getFilesRecursively(inputDir);
     for (const file of files) {
         const functions = extractFunctionsUsingTS(file);
+        console.log(`Found ${functions.length} functions in file: ${file}`);
         for (const func of functions) {
+            console.log(`Processing function: ${func.name}, Exported: ${func.exported}`);
+            if (!func.exported) {
+                console.log(`Skipping non-exported function: ${func.name}`);
+                continue;
+            }
+
             const messages: ChatCompletionRequestMessage[] = [
                 {
                     role: 'system',
@@ -197,4 +296,5 @@ function runTests(testFilePath: string): Promise<{ success: boolean; results: st
             }
         }
     }
+    console.log('Finished processing all functions');
 })();
