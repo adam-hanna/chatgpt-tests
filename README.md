@@ -1,6 +1,8 @@
 # ChatGPT Tests
 
-Use ChatGPT to write your unit tests
+Use ChatGPT to write your unit tests.
+
+Presently, it only tests exported functions.
 
 ## Usage
 
