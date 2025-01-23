@@ -32,3 +32,5 @@ terraform.rc
 **/.terraform/
 
 **/*/*.test.ts
+
+jest-results.json
