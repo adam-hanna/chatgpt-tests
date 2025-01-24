@@ -1,12 +1,18 @@
 # ChatGPT Tests
 
-Use ChatGPT to write your unit tests.
+Use ChatGPT to write your unit tests!
 
-Presently, it only tests exported functions.
+Recursively searches through the provided directory looking for `.js` and `.ts` files.
+
+Presently, it only tests exported functions. It creates one file per exported function in the same directory.
 
 ## Usage
 
-`$ npm run dev -- ./src/files-for-test`
+```
+$ cp .env.example .env
+$ npm i
+$ npm run dev -- ./examples`
+```
 
 ## LICENSE
 

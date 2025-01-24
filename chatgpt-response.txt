@@ -1,0 +1,103 @@
+```typescript
+import { extractCodeBlocks } from './index';
+
+describe('extractCodeBlocks', () => {
+    test('returns an empty array when there are no code blocks', () => {
+        const input = 'This is a string without code blocks.';
+        const expected: string[] = [];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('extracts a single code block without language specifier', () => {
+        const input = 'Here is some code:\n```\nconsole.log("Hello, World!");\n```';
+        const expected = ['console.log("Hello, World!");'];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('extracts a single code block with language specifier', () => {
+        const input = 'Here is some TypeScript code:\n```typescript\nconst a: number = 5;\n```';
+        const expected = ['const a: number = 5;'];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('extracts multiple code blocks', () => {
+        const input = `
+            First code block:
+            \`\`\`javascript
+            console.log("First");
+            \`\`\`
+            Second code block:
+            \`\`\`typescript
+            const b: string = "Second";
+            \`\`\`
+        `;
+        const expected = [
+            'console.log("First");',
+            'const b: string = "Second";'
+        ];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('handles empty code blocks', () => {
+        const input = 'Empty code block:\n```\n```';
+        const expected = [''];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('extracts code blocks with unsupported language specifiers', () => {
+        const input = 'Unsupported language:\n```python\ndef foo(): pass\n```';
+        const expected = ['def foo(): pass'];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('handles code blocks with mixed content', () => {
+        const input = `
+            Mixed content:
+            \`\`\`javascript
+            function test() {
+                return \`Hello\`;
+            }
+            \`\`\`
+            Some text.
+            \`\`\`
+            Simple code.
+            \`\`\`
+        `;
+        const expected = [
+            'function test() {\n    return `Hello`;\n}',
+            'Simple code.'
+        ];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('handles code blocks with extra backticks inside', () => {
+        const input = 'Code with backticks:\n```\nconst str = `Hello \`World\``;\n```';
+        const expected = ['const str = `Hello `World``;'];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('does not match incomplete code blocks', () => {
+        const input = 'Incomplete code block:\n```\nconst a = 10;';
+        const expected: string[] = [];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('handles code blocks with different line endings', () => {
+        const input = 'Windows line endings:\r\n```\r\nconsole.log("Hi");\r\n```';
+        const expected = ['console.log("Hi");'];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('handles code blocks with nested backticks', () => {
+        const input = 'Nested backticks:\n```\n`code` inside\n```';
+        const expected = ['`code` inside'];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('extracts code blocks with no newline after the opening backticks', () => {
+        const input = 'Code block:\n```javascript\nconst x = 1;\n```';
+        const expected = ['const x = 1;'];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+});
+```

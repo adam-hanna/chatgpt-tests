@@ -1,0 +1,11 @@
+import { extractCodeBlocks } from './index';
+
+describe('extractCodeBlocks', () => {
+    test('returns an empty array when there are no code blocks', () => {
+        const input = 'This is a string without code blocks.';
+        const expected: string[] = [];
+        expect(extractCodeBlocks(input)).toEqual(expected);
+    });
+
+    test('extracts a single code block without language specifier', () => {
+        const input = 'Here is some code:\n

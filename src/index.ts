@@ -5,6 +5,10 @@ import ts from 'typescript';
 
 import OpenAI from 'openai';
 
+const model: string = 'o1-mini'
+const initialRole: 'system' | 'user' | 'assistant' = 'user';
+const maxTries = 10;
+
 // Parse command-line arguments
 const args = process.argv.slice(2); // Exclude `node` and script path
 const inputDir = args[0]; // Assume the first argument is the directory
@@ -182,12 +186,14 @@ async function getTestsFromChatGPT(
     messages.push(userMessage);
 
     const response = await client.chat.completions.create({
-        model: 'gpt-4',
+        model,
         messages,
     });
 
     const rawResponse = response.choices[0]?.message?.content || '';
     const testBlocks = extractCodeBlocks(rawResponse);
+    //fs.writeFileSync('chatgpt-response.txt', rawResponse); // Save response for debugging
+    //fs.writeFileSync('extracted-tests.txt', testBlocks.join('\n\n')); // Save extracted tests for debugging
 
     messages.push({ role: 'assistant', content: rawResponse });
     return testBlocks;
@@ -202,13 +208,13 @@ async function handleTestResults(
     const relativePath = `./${path.basename(filePath)}`; // Filename for imports
     const failureMessage: ChatCompletionRequestMessage = {
         role: 'user',
-        content: `The following tests failed:\n\n${testResults}\n\nHere is the function being tested (imported from '${relativePath}'):\n\n${functionCode}\n\nRevise the tests to address the issues. Include the updated tests in a single \`\`\`typescript\`\`\` code block.`,
+        content: `The following tests failed:\n\n${testResults}\n\nRevise the tests to address the issues. Include the updated tests in a single \`\`\`typescript\`\`\` code block.`,
     };
 
     messages.push(failureMessage);
 
     const response = await client.chat.completions.create({
-        model: 'gpt-4',
+        model,
         messages,
     });
 
@@ -240,7 +246,6 @@ function runTests(testFilePath: string): Promise<{ success: boolean; results: st
 }
 
 (async () => {
-    const maxTries = 10;
     const files = getFilesRecursively(inputDir);
     for (const file of files) {
         const functions = extractFunctionsUsingTS(file);
@@ -254,7 +259,7 @@ function runTests(testFilePath: string): Promise<{ success: boolean; results: st
 
             const messages: ChatCompletionRequestMessage[] = [
                 {
-                    role: 'system',
+                    role: initialRole,
                     content: 'You are a helpful assistant that generates and revises unit tests for JavaScript/TypeScript code.',
                 },
             ];
@@ -282,10 +287,10 @@ function runTests(testFilePath: string): Promise<{ success: boolean; results: st
 
                     const { success, results } = await runTests(testFilePath);
                     if (success) {
-                        console.log('All tests passed:', results);
+                        console.log('All tests passed');
                         allTestsPassing = true;
                     } else {
-                        console.error('Tests failed:', results);
+                        console.error('Tests failed');
                         const revisedTests = await handleTestResults(results, func.code, file, messages);
                         writeTestsToFile(func.name, revisedTests, file); // Save revised tests
                     }
