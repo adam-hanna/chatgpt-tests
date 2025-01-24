@@ -11,7 +11,7 @@ Presently, it only tests exported functions. It creates one file per exported fu
 ```
 $ cp .env.example .env
 $ npm i
-$ npm run dev -- ./examples`
+$ npm run dev -- ./examples
 ```
 
 ## LICENSE
