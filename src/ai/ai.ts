@@ -6,7 +6,6 @@ export type TConversation = {
     functionName: string;
     functionCode: string;
     functionContext: string;
-
 }
 
 export interface IAI {

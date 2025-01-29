@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-import { IAI, TConversation } from "@/src/ai";
+import { IAI, TAI, TConversation } from "@/src/ai";
 
 export class ErrConversationNotFound extends Error {
     constructor(message: string = "Conversation not found") {
@@ -18,8 +18,9 @@ const extractCodeFromResponse = (response: any): string => {
 }
 
 export class ChatGPT implements IAI {
-    constructor() {
+    constructor(config: TAI) {
         console.debug('New ChatGPT class');
+        this.config = config;
     }
 
     public async startConversation(conversation: TConversation): Promise<[string, Error | null]> {
@@ -52,5 +53,6 @@ export class ChatGPT implements IAI {
         return uuidv4();
     }
 
+    private config: TAI;
     private conversations: { [key: string]: TChatGPTConversation } = {};
 }

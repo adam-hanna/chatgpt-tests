@@ -2,7 +2,7 @@ import { Command } from 'commander';
 
 import { runCommand, TConfig as TRunConfig } from '@/src/cli/commands/run';
 import { Config } from '@/src/config';
-import { ChatGPT } from '../ai/chatGPT';
+import { ChatGPT } from '@/src/ai/chatGPT';
 
 class CLI {
     private program: Command;
@@ -14,28 +14,41 @@ class CLI {
 
     private setupCommands() {
         this.program
-            .command('run')
+            .command('run <testDir>')
             .description('Run the CLI with specified options')
             .option('--maxTries <number>', 'Maximum number of tries', parseInt)
             .option('--model <string>', 'Model to use')
             .option('--ai <string>', 'AI to use')
-            .action(async (options) => {
-                try {
-                    const cfgSvc = new Config();
-                    const [_, ok] = await cfgSvc.fetchConfig();
-                    if (!ok) {
-                        throw new Error('Failed to fetch config');
-                    }
-
-                    const chatGPT = new ChatGPT();
-                    const config: TRunConfig = {
-                        aiSvc: chatGPT,
-                    };
-
-                    await runCommand(config)
-                } catch (error) {
-                    console.error('Error running command:', error);
+            .option('--rootDir <string>', 'Root directory', './')
+            .action(async (testDir, options) => {
+            try {
+                const cfgSvc = new Config();
+                const [_, configOK] = await cfgSvc.fetchConfig();
+                if (!configOK) {
+                    throw new Error('Failed to fetch config');
                 }
+
+                const [apiKey, apiOK] = cfgSvc.fetchConfigValue('AI_PROVIDER_API_KEY');
+                if (!apiOK || !apiKey) {
+                    throw new Error('apiKey is required');
+                }
+
+                const chatGPT = new ChatGPT({
+                    apiKey,
+                    model: options.model,
+                    ai: options.ai,
+                });
+
+                const config: TRunConfig = {
+                    aiSvc: chatGPT,
+                    maxTries: options.maxTries,
+                    rootDir: options.rootDir,
+                    testDir: testDir,
+                };
+                await runCommand(config)
+            } catch (error) {
+                console.error('Error running command:', error);
+            }
             });
 
         this.program.parse(process.argv);
