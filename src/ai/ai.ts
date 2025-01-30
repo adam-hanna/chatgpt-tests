@@ -1,8 +1,13 @@
-export type TAI = {}
+export type TAI = {
+    apiKey: string;
+    model: string;
+    debug: boolean;
+}
 
 export type TConversation = {
     id: string;
     fileLocation: string;
+    relativePath: string;
     functionName: string;
     functionCode: string;
     functionContext: string;
@@ -13,6 +18,6 @@ export interface IAI {
     startConversation(conversation: TConversation): Promise<[string, Error | null]>;
     stopConversation(conversationID: string): Promise<Error | null>;
 
-    generateInitialTests(conversationID: string): Promise<[string, Error | null]>;
-    provideFeedback(conversationID: string, feedback: string): Promise<[string, Error | null]>;
+    generateInitialTests(conversationID: string): Promise<[Array<string>, Error | null]>;
+    provideFeedback(conversationID: string, feedback: string): Promise<[Array<string>, Error | null]>;
 }
