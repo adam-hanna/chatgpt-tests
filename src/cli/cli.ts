@@ -17,9 +17,9 @@ class CLI {
         this.program
             .command('run <testDir>')
             .description('Run the CLI with specified options')
-            .option('--maxTries <number>', 'Maximum number of tries', parseInt)
-            .option('--model <string>', 'Model to use')
-            .option('--ai <string>', 'AI to use')
+            .option('--maxTries <number>', 'Maximum number of tries', parseInt, 5)
+            .option('--model <string>', 'Model to use', 'o1-mini')
+            .option('--ai <string>', 'AI to use', 'chatGPT')
             .option('--rootDir <string>', 'Root directory', './')
             .option('--language <string>', 'Coding language', 'typescript')
             .action(async (testDir, options) => {
@@ -61,4 +61,4 @@ class CLI {
     }
 }
 
-new CLI();
+export const cli = new CLI();

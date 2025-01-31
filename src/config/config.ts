@@ -4,18 +4,14 @@ export type TConfig = {
 
 // TODO: @adam-hanna - support Optional<> rather than use T | null
 const readConfigFromEnv = (): [TConfig | null, boolean] => {
-    const config: Partial<TConfig> = {};
+    const apiKey = process.env.AI_PROVIDER_API_KEY;
+    if (!apiKey) {
+        return [null, false];
+    }
 
-    (Object.keys(config) as (keyof TConfig)[]).forEach(key => {
-        const value = process.env[key];
-        if (!value) {
-            console.error(`Missing environment variable: ${key}`);
-            return [null, false]
-        }
-        config[key] = value;
-    });
-
-    return [config as TConfig, true];
+    return [{
+        AI_PROVIDER_API_KEY: apiKey
+    }, true];
 }
 
 export interface IConfig {
