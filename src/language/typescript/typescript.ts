@@ -1,10 +1,10 @@
 import { exec } from 'child_process';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import { readFileSync, writeFileSync } from 'fs';
 import { DirResult, dirSync } from 'tmp';
-import { createSourceFile, ScriptTarget, Node, isFunctionDeclaration, isClassDeclaration, isInterfaceDeclaration, isEnumDeclaration, isVariableStatement, SyntaxKind, isVariableDeclaration, isIdentifier, isArrowFunction, isFunctionExpression, forEachChild } from 'typescript';
+import { createSourceFile, ScriptTarget, Node, isFunctionDeclaration, isClassDeclaration, isInterfaceDeclaration, isEnumDeclaration, isVariableStatement, SyntaxKind, isVariableDeclaration, isIdentifier, isArrowFunction, isFunctionExpression, forEachChild, StringLiteral, isImportDeclaration, isImportEqualsDeclaration, isExternalModuleReference, isStringLiteral, isCallExpression, createProgram, FunctionLikeDeclarationBase, isMethodDeclaration, TypeChecker, isBlock } from 'typescript';
 
-import { ILanguage, TLanguage } from '@/src/language';
+import { ILanguage, TFunctionTypeInfo, TLanguage } from '@/src/language';
 
 export type TTypescript = {
 
@@ -15,6 +15,9 @@ export class Typescript implements ILanguage {
         console.debug('New Typescript class');
         this.config = config;
         this.tempDir = dirSync({ unsafeCleanup: true });
+    }
+    extractTypesForFunction(filePath: string, functionName: string): TFunctionTypeInfo | null {
+        throw new Error('Method not implemented.');
     }
 
     public writeTestsToFile(functionName: string, testBlocks: string[], sourceFilePath: string): void {
@@ -101,14 +104,78 @@ export class Typescript implements ILanguage {
         return functions;
     }
 
+    /**
+     * Returns an array of the entire import or require statements found in the file.
+     * Examples:
+     *   - import { named1, named2 } from "es6-named";
+     *   - import foo = require("foo-lib");
+     *   - const bar = require("bar-lib");
+     */
     public extractImports(filePath: string): string[] {
-        // TODO: @adam-hanna - Implement extractImports
-        return [];
-    }
+        // Read the source code from the file
+        const sourceCode = readFileSync(resolve(filePath), 'utf-8');
 
-    public exportTypes(filePath: string): string[] {
-        // TODO: @adam-hanna - Implement exportTypes
-        return [];
+        // Create a SourceFile object
+        const sourceFile = createSourceFile(
+            filePath,
+            sourceCode,
+            ScriptTarget.Latest,
+            /* setParentNodes= */ true
+        );
+
+        const imports: string[] = [];
+
+        // A recursive function to walk through the AST
+        function visit(node: Node) {
+            // 1) ES6 import declarations: import something from '...';
+            if (isImportDeclaration(node)) {
+                // Extract the exact text of the import statement
+                const importStatement = sourceCode
+                    .slice(node.getStart(), node.getEnd())
+                    .trim();
+                imports.push(importStatement);
+            }
+            // 2) TypeScript import-equals declarations: import foo = require('bar');
+            else if (isImportEqualsDeclaration(node)) {
+                if (isExternalModuleReference(node.moduleReference)) {
+                    const importStatement = sourceCode
+                        .slice(node.getStart(), node.getEnd())
+                        .trim();
+                    imports.push(importStatement);
+                }
+            }
+            // 3) CommonJS require calls: const foo = require('bar');
+            else if (isCallExpression(node)) {
+                if (
+                    isIdentifier(node.expression) &&
+                    node.expression.text === 'require' &&
+                    node.arguments.length === 1 &&
+                    isStringLiteral(node.arguments[0])
+                ) {
+                    // If we’re inside something like "const X = require('...');"
+                    // the Node we have is only the CallExpression. Usually, the
+                    // entire statement is the parent (a VariableStatement or ExpressionStatement).
+                    // We'll grab the parent if it exists.
+                    const nodeToExtract = node.parent || node;
+
+                    let requireStatement = sourceCode
+                        .slice(nodeToExtract.getStart(), nodeToExtract.getEnd())
+                        .trim();
+                    if (requireStatement.includes('=')) {
+                        requireStatement = `const ${requireStatement}`;
+                    } 
+                    imports.push(`${requireStatement}`);
+                }
+            }
+
+            // Recurse deeper
+            forEachChild(node, visit);
+        }
+
+        // Start traversing from the root of the AST
+        visit(sourceFile);
+
+        return imports;
     }
 
     public fileEndings(): string[] {
