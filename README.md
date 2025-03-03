@@ -31,7 +31,7 @@ Options:
   --language <string>  Coding language (default: "typescript")
   -h, --help           display help for command
 
-$ npm run dev -- run \
+$ npm run dev -- run ./examples \
 --model=claude-3-7-sonnet-20250219 \
 --ai=claude \
 --rootDir=./examples
