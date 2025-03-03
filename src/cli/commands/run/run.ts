@@ -22,6 +22,9 @@ function getFilesRecursively(dir: string): string[] {
         if (statSync(fullPath).isDirectory()) {
             files = files.concat(getFilesRecursively(fullPath));
         } else if (fullPath.endsWith('.js') || fullPath.endsWith('.ts')) {
+            if (fullPath.includes('.test.') || fullPath.includes('.spec.')) {
+                return; // Skip test files
+            }
             files.push(fullPath);
         }
     });
