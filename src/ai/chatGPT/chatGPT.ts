@@ -67,6 +67,8 @@ export class ChatGPT implements IAI {
 Write comprehensive unit tests for the following function, which is defined in the file '${fileLocation}'. 
 Use the import statement \`import { ${functionName} } from '${relativePath}';\` to import the function. 
 Do not use any external libraries other than jest.
+The imports in this file that you may need to know about are: ${conversation.functionImports}\n
+The types used are: ${conversation.functionTypes}\n
 Include the tests inside a single \`\`\`typescript\`\`\` code block, and avoid additional explanations.\n\n${functionCode}`,
             }
         ]

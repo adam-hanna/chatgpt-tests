@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "clean": "find ./src -name '*.test.*s' -type f -delete && rm jest-results.json",
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx src/index.ts",
     "test": "jest ./src"
   },
   "author": "",
@@ -23,6 +23,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "commander": "^13.1.0",
     "openai": "^4.80.0",
     "tmp": "^0.2.3",

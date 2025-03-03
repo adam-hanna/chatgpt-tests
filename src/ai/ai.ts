@@ -10,7 +10,8 @@ export type TConversation = {
     relativePath: string;
     functionName: string;
     functionCode: string;
-    functionContext: string;
+    functionImports: string;
+    functionTypes: string;
 }
 
 export interface IAI {

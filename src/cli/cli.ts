@@ -4,8 +4,10 @@ import { runCommand, TConfig as TRunConfig } from '@/src/cli/commands/run';
 import { Config } from '@/src/config';
 import { ChatGPT } from '@/src/ai/chatGPT';
 import { Typescript } from '@/src/language/typescript';
+import { IAI } from '@/src/ai';
+import { Claude } from '@/src/ai/claude';
 
-class CLI {
+export class CLI {
     private program: Command;
 
     constructor() {
@@ -19,7 +21,7 @@ class CLI {
             .description('Run the CLI with specified options')
             .option('--maxTries <number>', 'Maximum number of tries', parseInt, 5)
             .option('--model <string>', 'Model to use', 'o1-mini')
-            .option('--ai <string>', 'AI to use', 'chatGPT')
+            .option('--ai <string>', 'AI to use', 'chatGPT, claude')
             .option('--rootDir <string>', 'Root directory', './')
             .option('--language <string>', 'Coding language', 'typescript')
             .action(async (testDir, options) => {
@@ -35,16 +37,30 @@ class CLI {
                         throw new Error('apiKey is required');
                     }
 
-                    const chatGPT = new ChatGPT({
-                        apiKey,
-                        model: options.model,
-                        debug: true,
-                    });
+                    let aiSvc: IAI;
+                    switch(options.ai.toLowerCase()) {
+                        case 'chatgpt':
+                            aiSvc = new ChatGPT({
+                                apiKey,
+                                model: options.model,
+                                debug: true,
+                            });
+                            break;
+                        case 'claude':
+                            aiSvc = new Claude({
+                                apiKey,
+                                model: options.model,
+                                debug: true,
+                            });
+                            break;
+                        default:
+                            throw new Error('Invalid AI, please use chatGPT or claude');
+                    }
 
                     const typescript = new Typescript({});
 
                     const config: TRunConfig = {
-                        aiSvc: chatGPT,
+                        aiSvc,
                         languageSvc: typescript,
                         maxTries: options.maxTries,
                         rootDir: options.rootDir,
@@ -60,5 +76,3 @@ class CLI {
         this.program.parse(process.argv);
     }
 }
-
-export const cli = new CLI();
