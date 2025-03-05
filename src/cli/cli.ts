@@ -34,8 +34,8 @@ export class CLI {
             .option('--ai <string>', 'AI to use (chatGPT or claude)', 'claude')
             .option('--rootDir <string>', 'Root directory', './')
             .option('--language <string>', 'Coding language', 'typescript')
-            .option('sleep <number>', 'Sleep time between api calls (ms)', parseInt, 1000)
-            .option('export', 'Modify the sourcefile to export all top level declarations?', true)
+            .option('--sleep <number>', 'Sleep time between api calls (ms)', parseInt, 1000)
+            .option('--export', 'Modify the sourcefile to export all top level declarations?', false)
             .action(async (testDir, options) => {
                 try {
                     const cfgSvc = new Config();
