@@ -15,6 +15,7 @@ export interface ILanguage {
     fileEndings(): string[];
 
     analyzeSourceCodeFile(filePath: string): { importStatements: string[]; exportedFunctions: TExportedFunction[] };
+    exportAllDeclarations(filePath: string): Promise<void>;
 
     cleanup(): void;
 }

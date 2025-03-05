@@ -13,6 +13,16 @@ export class CLI {
     constructor() {
         this.program = new Command();
         this.setupCommands();
+        this.setupSignalHandlers();
+    }
+
+    private setupSignalHandlers() {
+        // Add a handler for SIGINT (Ctrl+C)
+        process.on('SIGINT', () => {
+            console.log('\nGracefully shutting down from SIGINT (Ctrl+C)');
+            // Perform any cleanup operations here if needed
+            process.exit(0);
+        });
     }
 
     private setupCommands() {
@@ -20,10 +30,12 @@ export class CLI {
             .command('run <testDir>')
             .description('Run the CLI with specified options')
             .option('--maxTries <number>', 'Maximum number of tries', parseInt, 5)
-            .option('--model <string>', 'Model to use', 'o1-mini')
-            .option('--ai <string>', 'AI to use', 'chatGPT, claude')
+            .option('--model <string>', 'Model to use', 'claude-3-7-sonnet-20250219')
+            .option('--ai <string>', 'AI to use (chatGPT or claude)', 'claude')
             .option('--rootDir <string>', 'Root directory', './')
             .option('--language <string>', 'Coding language', 'typescript')
+            .option('sleep <number>', 'Sleep time between api calls (ms)', parseInt, 1000)
+            .option('export', 'Modify the sourcefile to export all top level declarations?', true)
             .action(async (testDir, options) => {
                 try {
                     const cfgSvc = new Config();
@@ -66,6 +78,8 @@ export class CLI {
                         rootDir: options.rootDir,
                         testDir: testDir,
                         fileEndings: [],
+                        sleep: options.sleep,
+                        export: options.export,
                     };
                     await runCommand(config)
                 } catch (error) {

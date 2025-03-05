@@ -12,6 +12,8 @@ export type TConfig = {
     rootDir: string;
     testDir: string;
     fileEndings: string[];
+    sleep: number;
+    export: boolean;
 }
 
 // Recursively read files from a directory
@@ -22,7 +24,7 @@ function getFilesRecursively(dir: string): string[] {
         if (statSync(fullPath).isDirectory()) {
             files = files.concat(getFilesRecursively(fullPath));
         } else if (fullPath.endsWith('.js') || fullPath.endsWith('.ts')) {
-            if (fullPath.includes('.test.') || fullPath.includes('.spec.')) {
+            if (fullPath.includes('.test.') || fullPath.includes('.spec.') || fullPath.includes('.d.')) {
                 return; // Skip test files
             }
             files.push(fullPath);
@@ -34,6 +36,10 @@ function getFilesRecursively(dir: string): string[] {
 export const runCommand = async (config: TConfig): Promise<void> => {
     const files = getFilesRecursively(config.testDir);
     for (const file of files) {
+        if (config.export) {
+            await config.languageSvc.exportAllDeclarations(file);
+        }
+
         const analyzedFile = config.languageSvc.analyzeSourceCodeFile(file);
         console.log(`Found ${analyzedFile.exportedFunctions.length} functions in file: ${file}`);
         for (const func of analyzedFile.exportedFunctions) {
@@ -68,7 +74,7 @@ export const runCommand = async (config: TConfig): Promise<void> => {
                 try {
                     console.log(`Processing function: ${func.functionName}; Try #${numTries} of ${config.maxTries}`);
 
-                    const testFilePath = join(dirname(file), `${func.functionName}.test.ts`);
+                    const testFilePath = join(dirname(file), `${func.functionName}.ut.test.ts`);
 
                     if (numTries === 1) {
                         // Initial test generation
@@ -93,6 +99,8 @@ export const runCommand = async (config: TConfig): Promise<void> => {
                 } catch (error) {
                     console.error(`Error processing function ${func.functionName}:`, error);
                     break; // Stop processing this function on critical error
+                } finally {
+                    await new Promise(resolve => setTimeout(resolve, config.sleep)); // Sleep
                 }
             }
         }

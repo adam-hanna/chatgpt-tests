@@ -66,10 +66,16 @@ export class Claude implements IAI {
         
         // User message for Claude
         const userPrompt = `Write comprehensive unit tests for the following function, which is defined in the file '${fileLocation}'. 
-Use the import statement \`import { ${functionName} } from '${relativePath}';\` to import the function. 
-Do not use any external libraries other than jest.
-The imports in this file that you may need to know about are: ${conversation.functionImports}
-The types used are: ${conversation.functionTypes}
+Use the import statement \`import { ${functionName} } from '${relativePath}';\` to import the function. Do not use any external libraries other than jest.
+
+The imports in this file that you may need to know about are: 
+${conversation.functionImports}
+
+The types used are:
+${conversation.functionTypes}
+
+Do not mock the typs, interfaces, enums, etc. Rather, import them from the same import statement given above (if available), or if not in the given imports, import them from the same file as the function (e.g. import { <TYPE GOES HERE> } from '${relativePath}';).
+
 Include the tests inside a single \`\`\`typescript\`\`\` code block, and avoid additional explanations.
 
 ${functionCode}`;

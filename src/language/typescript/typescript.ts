@@ -1,8 +1,8 @@
 import { exec } from 'child_process';
-import { dirname, join, resolve } from 'path';
-import { readFileSync, writeFileSync } from 'fs';
+import { basename, dirname, extname, join, resolve } from 'path';
+import { existsSync, openSync, promises, readFileSync, writeFileSync } from 'fs';
 import { DirResult, dirSync } from 'tmp';
-import { createSourceFile, ScriptTarget, Node, isFunctionDeclaration, isClassDeclaration, isInterfaceDeclaration, isEnumDeclaration, isVariableStatement, SyntaxKind, isVariableDeclaration, isIdentifier, isArrowFunction, isFunctionExpression, forEachChild, StringLiteral, isImportDeclaration, isImportEqualsDeclaration, isExternalModuleReference, isStringLiteral, isCallExpression, createProgram, FunctionLikeDeclarationBase, isMethodDeclaration, TypeChecker, isBlock, isTypeAliasDeclaration } from 'typescript';
+import { createSourceFile, ScriptTarget, Node, isFunctionDeclaration, isClassDeclaration, isInterfaceDeclaration, isEnumDeclaration, isVariableStatement, SyntaxKind, isVariableDeclaration, isIdentifier, isArrowFunction, isFunctionExpression, forEachChild, StringLiteral, isImportDeclaration, isImportEqualsDeclaration, isExternalModuleReference, isStringLiteral, isCallExpression, createProgram, FunctionLikeDeclarationBase, isMethodDeclaration, TypeChecker, isBlock, isTypeAliasDeclaration, createPrinter, NewLineKind, TransformationContext, SourceFile, isSourceFile, isModuleDeclaration, factory, visitEachChild, visitNode, transform, VariableStatement } from 'typescript';
 
 import { ILanguage, TExportedFunction, TLanguage } from '@/src/language';
 
@@ -10,11 +10,18 @@ export type TTypescript = {
 
 } & TLanguage;
 
+const fileName = 'jest-results.json'
+
 export class Typescript implements ILanguage {
     constructor(config: TTypescript) {
         console.debug('New Typescript class');
         this.config = config;
         this.tempDir = dirSync({ unsafeCleanup: true });
+        console.debug(`Created temporary directory: ${this.tempDir.name}`);
+
+        const filePath = join(this.tempDir.name, fileName);
+        openSync(filePath, 'w');
+        console.debug(`File created successfully at ${filePath}`);
     }
 
     public writeTestsToFile(functionName: string, testBlocks: string[], sourceFilePath: string): void {
@@ -28,19 +35,23 @@ export class Typescript implements ILanguage {
 
     public async runTests(rootDir: string, testFilePath: string): Promise<{ success: boolean; results: string }> {
         return new Promise((resolve) => {
-            const testResultsLocation = join(this.tempDir.name, 'jest-results.json')
-            exec(`npx jest --json --outputFile=${testResultsLocation} --root=${rootDir} ${testFilePath}`, (error, stdout, stderr) => {
+            const testResultsLocation = join(this.tempDir.name, fileName)
+            exec(`cd ${rootDir} && npx jest --json --outputFile=${testResultsLocation} ${testFilePath}`, (error, stdout, stderr) => {
                 if (error) {
+                    // console.error(`error running tests; error: ${error?.message}\nsterr: ${stderr}`);
                     // Read Jest results file for structured failure details
                     let results = stderr || stdout;
                     try {
                         const jsonResults = JSON.parse(readFileSync(testResultsLocation, 'utf-8'));
                         results = JSON.stringify(jsonResults, null, 2);
-                    } catch {
+                        // console.log(results)
+                    } catch (e) {
                         // Fall back to raw output if JSON parsing fails
+                        // console.error('failed to read test results', e);
                     }
                     resolve({ success: false, results });
                 } else {
+                    console.debug(`tests passed; stderr ${stderr}; stdout ${stdout}`);
                     resolve({ success: true, results: stdout });
                 }
             });
@@ -165,6 +176,159 @@ export class Typescript implements ILanguage {
             importStatements,
             exportedFunctions,
         };
+    }
+
+    /**
+    * Takes a filepath to a TS or JS file, analyzes it, exports all declarations,
+    * and overwrites the original file.
+    * 
+    * @param filePath Path to the TypeScript or JavaScript file
+    * @returns Promise that resolves when the operation is complete
+    */
+    public async exportAllDeclarations(filePath: string): Promise<void> {
+      // Ensure the file exists
+      if (!existsSync(filePath)) {
+        throw new Error(`File not found: ${filePath}`);
+      }
+
+      // Check if it's a TS or JS file
+      const ext = extname(filePath).toLowerCase();
+      if (ext !== '.ts' && ext !== '.js') {
+        throw new Error(`Only .ts and .js files are supported, got: ${ext}`);
+      }
+
+      // Read the source file
+      const sourceText = readFileSync(filePath, 'utf-8');
+
+      // Create a TS source file object
+      const sourceFile = createSourceFile(
+        basename(filePath),
+        sourceText,
+        ScriptTarget.Latest,
+        true
+      );
+
+      // Create a printer to generate the modified source
+      const printer = createPrinter({ newLine: NewLineKind.LineFeed });
+
+      // Find all top-level declarations and add export modifiers where needed
+      const transformer = (context: TransformationContext) => {
+        return (rootNode: SourceFile) => {
+          function visit(node: Node): Node {
+            // Only transform top-level declarations
+            if (isSourceFile(node.parent)) {
+              // Check if the node is a declaration that can be exported
+              if (
+                (isVariableStatement(node) ||
+                 isFunctionDeclaration(node) ||
+                 isClassDeclaration(node) ||
+                 isInterfaceDeclaration(node) ||
+                 isTypeAliasDeclaration(node) ||
+                 isEnumDeclaration(node) ||
+                 isModuleDeclaration(node)) && 
+                !isVariableStatement(node) && node.name !== undefined // Ensure it has a name
+              ) {
+                // Check if it's already exported
+                const hasExportModifier = node.modifiers?.some(mod => 
+                  mod.kind === SyntaxKind.ExportKeyword
+                );
+
+                // If not exported, add the export modifier
+                if (!hasExportModifier) {
+                  // Create export modifier
+                  const exportModifier = factory.createModifier(SyntaxKind.ExportKeyword);
+                
+                  // Get existing modifiers or create empty array
+                  const existingModifiers = node.modifiers || [];
+                
+                  // Create new modifiers array with export added
+                  const newModifiers = [exportModifier, ...existingModifiers];
+
+                  // Return new node with export modifier
+                  if (isVariableStatement(node)) {
+                    return factory.updateVariableStatement(
+                      node,
+                      newModifiers,
+                      (node as VariableStatement).declarationList
+                    );
+                  } else if (isFunctionDeclaration(node)) {
+                    return factory.updateFunctionDeclaration(
+                      node,
+                      newModifiers,
+                      node.asteriskToken,
+                      node.name,
+                      node.typeParameters,
+                      node.parameters,
+                      node.type,
+                      node.body
+                    );
+                  } else if (isClassDeclaration(node)) {
+                    return factory.updateClassDeclaration(
+                      node,
+                      newModifiers,
+                      node.name,
+                      node.typeParameters,
+                      node.heritageClauses,
+                      node.members
+                    );
+                  } else if (isInterfaceDeclaration(node)) {
+                    return factory.updateInterfaceDeclaration(
+                      node,
+                      newModifiers,
+                      node.name,
+                      node.typeParameters,
+                      node.heritageClauses,
+                      node.members
+                    );
+                  } else if (isTypeAliasDeclaration(node)) {
+                    return factory.updateTypeAliasDeclaration(
+                      node,
+                      newModifiers,
+                      node.name,
+                      node.typeParameters,
+                      node.type
+                    );
+                  } else if (isEnumDeclaration(node)) {
+                    return factory.updateEnumDeclaration(
+                      node,
+                      newModifiers,
+                      node.name,
+                      node.members
+                    );
+                  } else if (isModuleDeclaration(node)) {
+                    return factory.updateModuleDeclaration(
+                      node,
+                      newModifiers,
+                      node.name,
+                      node.body
+                    );
+                  }
+                }
+              }
+            }
+
+            // For other nodes or already exported declarations, just visit their children
+            return visitEachChild(node, visit, context);
+          }
+
+          return visitNode(rootNode, visit) as SourceFile;
+        };
+      };
+
+      // Apply the transformation
+      const result = transform(sourceFile, [transformer]);
+      const transformedSourceFile = result.transformed[0];
+
+      // Convert the transformed AST back to source text
+      const newSourceText = printer.printFile(transformedSourceFile as SourceFile);
+
+      // Write the modified source back to the file
+      await promises.writeFile(filePath, newSourceText, 'utf-8');
+
+      // Clean up
+      result.dispose();
+
+      console.log(`Successfully processed and exported all declarations in: ${filePath}`);
     }
 
     public fileEndings(): string[] {
