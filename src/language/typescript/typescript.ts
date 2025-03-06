@@ -2,7 +2,7 @@ import { exec } from 'child_process';
 import { basename, dirname, extname, join, resolve } from 'path';
 import { existsSync, openSync, promises, readFileSync, writeFileSync } from 'fs';
 import { DirResult, dirSync } from 'tmp';
-import { createSourceFile, ScriptTarget, Node, isFunctionDeclaration, isClassDeclaration, isInterfaceDeclaration, isEnumDeclaration, isVariableStatement, SyntaxKind, isVariableDeclaration, isIdentifier, isArrowFunction, isFunctionExpression, forEachChild, StringLiteral, isImportDeclaration, isImportEqualsDeclaration, isExternalModuleReference, isStringLiteral, isCallExpression, createProgram, FunctionLikeDeclarationBase, isMethodDeclaration, TypeChecker, isBlock, isTypeAliasDeclaration, createPrinter, NewLineKind, TransformationContext, SourceFile, isSourceFile, isModuleDeclaration, factory, visitEachChild, visitNode, transform, VariableStatement } from 'typescript';
+import { createSourceFile, ScriptTarget, Node, isFunctionDeclaration, isClassDeclaration, isInterfaceDeclaration, isEnumDeclaration, isVariableStatement, SyntaxKind, isVariableDeclaration, isIdentifier, isArrowFunction, isFunctionExpression, forEachChild, StringLiteral, isImportDeclaration, isImportEqualsDeclaration, isExternalModuleReference, isStringLiteral, isCallExpression, createProgram, FunctionLikeDeclarationBase, isMethodDeclaration, TypeChecker, isBlock, isTypeAliasDeclaration, createPrinter, NewLineKind, TransformationContext, SourceFile, isSourceFile, isModuleDeclaration, factory, visitEachChild, visitNode, transform, VariableStatement, TransformerFactory } from 'typescript';
 
 import { ILanguage, TExportedFunction, TLanguage } from '@/src/language';
 
@@ -24,11 +24,7 @@ export class Typescript implements ILanguage {
         console.debug(`File created successfully at ${filePath}`);
     }
 
-    public writeTestsToFile(functionName: string, testBlocks: string[], sourceFilePath: string): void {
-        const testFileName = `${functionName}.test.ts`;
-        const testDir = dirname(sourceFilePath);
-        const testFilePath = join(testDir, testFileName);
-
+    public writeTestsToFile(testFilePath: string, testBlocks: string[]): void {
         const content = testBlocks.join('\n\n'); // Combine all test blocks
         writeFileSync(testFilePath, content);
     }
@@ -37,7 +33,10 @@ export class Typescript implements ILanguage {
         return new Promise((resolve) => {
             const testResultsLocation = join(this.tempDir.name, fileName)
             exec(`cd ${rootDir} && npx jest --json --outputFile=${testResultsLocation} ${testFilePath}`, (error, stdout, stderr) => {
+                console.log(`stdout: ${stdout}`);
+                console.log(`stderr: ${stderr}`);
                 if (error) {
+                    console.error(`error running tests; error: ${error?.message}\nsterr: ${stderr}`);
                     // console.error(`error running tests; error: ${error?.message}\nsterr: ${stderr}`);
                     // Read Jest results file for structured failure details
                     let results = stderr || stdout;
@@ -186,72 +185,72 @@ export class Typescript implements ILanguage {
     * @returns Promise that resolves when the operation is complete
     */
     public async exportAllDeclarations(filePath: string): Promise<void> {
-      // Ensure the file exists
-      if (!existsSync(filePath)) {
-        throw new Error(`File not found: ${filePath}`);
-      }
-
-      // Check if it's a TS or JS file
-      const ext = extname(filePath).toLowerCase();
-      if (ext !== '.ts' && ext !== '.js') {
-        throw new Error(`Only .ts and .js files are supported, got: ${ext}`);
-      }
-
-      // Read the source file
-      const sourceText = readFileSync(filePath, 'utf-8');
-
-      // Create a TS source file object
-      const sourceFile = createSourceFile(
-        basename(filePath),
-        sourceText,
-        ScriptTarget.Latest,
-        true
-      );
-
-      // Create a printer to generate the modified source
-      const printer = createPrinter({ newLine: NewLineKind.LineFeed });
-
-      // Find all top-level declarations and add export modifiers where needed
-      const transformer = (context: TransformationContext) => {
-        return (rootNode: SourceFile) => {
-          function visit(node: Node): Node {
-            // Only transform top-level declarations
-            if (isSourceFile(node.parent)) {
-              // Check if the node is a declaration that can be exported
-              if (
-                (isVariableStatement(node) ||
-                 isFunctionDeclaration(node) ||
-                 isClassDeclaration(node) ||
-                 isInterfaceDeclaration(node) ||
-                 isTypeAliasDeclaration(node) ||
-                 isEnumDeclaration(node) ||
-                 isModuleDeclaration(node)) && 
-                !isVariableStatement(node) && node.name !== undefined // Ensure it has a name
-              ) {
-                // Check if it's already exported
-                const hasExportModifier = node.modifiers?.some(mod => 
-                  mod.kind === SyntaxKind.ExportKeyword
-                );
-
-                // If not exported, add the export modifier
-                if (!hasExportModifier) {
-                  // Create export modifier
-                  const exportModifier = factory.createModifier(SyntaxKind.ExportKeyword);
-                
-                  // Get existing modifiers or create empty array
-                  const existingModifiers = node.modifiers || [];
-                
-                  // Create new modifiers array with export added
-                  const newModifiers = [exportModifier, ...existingModifiers];
-
-                  // Return new node with export modifier
-                  if (isVariableStatement(node)) {
+      try {
+        // Ensure the file exists
+        if (!existsSync(filePath)) {
+          throw new Error(`File not found: ${filePath}`);
+        }
+    
+        // Check if it's a TS or JS file
+        const ext = extname(filePath).toLowerCase();
+        if (ext !== '.ts' && ext !== '.js') {
+          throw new Error(`Only .ts and .js files are supported, got: ${ext}`);
+        }
+    
+        // Read the source file
+        const sourceText = readFileSync(filePath, 'utf-8');
+        if (!sourceText || sourceText.trim().length === 0) {
+          throw new Error(`File is empty: ${filePath}`);
+        }
+    
+        console.log(`Processing file: ${filePath}`);
+    
+        // Create a TS source file object
+        const sourceFile = createSourceFile(
+          basename(filePath),
+          sourceText,
+          ScriptTarget.Latest,
+          true
+        );
+    
+        // Create a printer to generate the modified source
+        const printer = createPrinter({ newLine: NewLineKind.LineFeed });
+    
+        // Find all top-level declarations and add export modifiers where needed
+        const transformer: TransformerFactory<SourceFile> = (context: TransformationContext) => {
+          return (rootNode: SourceFile): SourceFile => {
+            function visit(node: Node): Node {
+              // Safety check: ensure node.parent exists before checking
+              if (node.parent && isSourceFile(node.parent)) {
+                // Handle VariableStatement (var, let, const)
+                if (isVariableStatement(node)) {
+                  const hasExportModifier = node.modifiers?.some(mod => 
+                    mod.kind === SyntaxKind.ExportKeyword
+                  );
+    
+                  if (!hasExportModifier) {
+                    const exportModifier = factory.createModifier(SyntaxKind.ExportKeyword);
+                    const existingModifiers = node.modifiers || [];
+                    const newModifiers = [exportModifier, ...existingModifiers];
+                    
                     return factory.updateVariableStatement(
                       node,
                       newModifiers,
-                      (node as VariableStatement).declarationList
+                      node.declarationList
                     );
-                  } else if (isFunctionDeclaration(node)) {
+                  }
+                } 
+                // Handle FunctionDeclaration with name
+                else if (isFunctionDeclaration(node) && node.name) {
+                  const hasExportModifier = node.modifiers?.some(mod => 
+                    mod.kind === SyntaxKind.ExportKeyword
+                  );
+    
+                  if (!hasExportModifier) {
+                    const exportModifier = factory.createModifier(SyntaxKind.ExportKeyword);
+                    const existingModifiers = node.modifiers || [];
+                    const newModifiers = [exportModifier, ...existingModifiers];
+                    
                     return factory.updateFunctionDeclaration(
                       node,
                       newModifiers,
@@ -262,7 +261,19 @@ export class Typescript implements ILanguage {
                       node.type,
                       node.body
                     );
-                  } else if (isClassDeclaration(node)) {
+                  }
+                }
+                // Handle ClassDeclaration with name
+                else if (isClassDeclaration(node) && node.name) {
+                  const hasExportModifier = node.modifiers?.some(mod => 
+                    mod.kind === SyntaxKind.ExportKeyword
+                  );
+    
+                  if (!hasExportModifier) {
+                    const exportModifier = factory.createModifier(SyntaxKind.ExportKeyword);
+                    const existingModifiers = node.modifiers || [];
+                    const newModifiers = [exportModifier, ...existingModifiers];
+                    
                     return factory.updateClassDeclaration(
                       node,
                       newModifiers,
@@ -271,7 +282,19 @@ export class Typescript implements ILanguage {
                       node.heritageClauses,
                       node.members
                     );
-                  } else if (isInterfaceDeclaration(node)) {
+                  }
+                }
+                // Handle InterfaceDeclaration with name
+                else if (isInterfaceDeclaration(node) && node.name) {
+                  const hasExportModifier = node.modifiers?.some(mod => 
+                    mod.kind === SyntaxKind.ExportKeyword
+                  );
+    
+                  if (!hasExportModifier) {
+                    const exportModifier = factory.createModifier(SyntaxKind.ExportKeyword);
+                    const existingModifiers = node.modifiers || [];
+                    const newModifiers = [exportModifier, ...existingModifiers];
+                    
                     return factory.updateInterfaceDeclaration(
                       node,
                       newModifiers,
@@ -280,7 +303,19 @@ export class Typescript implements ILanguage {
                       node.heritageClauses,
                       node.members
                     );
-                  } else if (isTypeAliasDeclaration(node)) {
+                  }
+                }
+                // Handle TypeAliasDeclaration with name
+                else if (isTypeAliasDeclaration(node) && node.name) {
+                  const hasExportModifier = node.modifiers?.some(mod => 
+                    mod.kind === SyntaxKind.ExportKeyword
+                  );
+    
+                  if (!hasExportModifier) {
+                    const exportModifier = factory.createModifier(SyntaxKind.ExportKeyword);
+                    const existingModifiers = node.modifiers || [];
+                    const newModifiers = [exportModifier, ...existingModifiers];
+                    
                     return factory.updateTypeAliasDeclaration(
                       node,
                       newModifiers,
@@ -288,14 +323,38 @@ export class Typescript implements ILanguage {
                       node.typeParameters,
                       node.type
                     );
-                  } else if (isEnumDeclaration(node)) {
+                  }
+                }
+                // Handle EnumDeclaration with name
+                else if (isEnumDeclaration(node) && node.name) {
+                  const hasExportModifier = node.modifiers?.some(mod => 
+                    mod.kind === SyntaxKind.ExportKeyword
+                  );
+    
+                  if (!hasExportModifier) {
+                    const exportModifier = factory.createModifier(SyntaxKind.ExportKeyword);
+                    const existingModifiers = node.modifiers || [];
+                    const newModifiers = [exportModifier, ...existingModifiers];
+                    
                     return factory.updateEnumDeclaration(
                       node,
                       newModifiers,
                       node.name,
                       node.members
                     );
-                  } else if (isModuleDeclaration(node)) {
+                  }
+                }
+                // Handle ModuleDeclaration with name
+                else if (isModuleDeclaration(node) && node.name) {
+                  const hasExportModifier = node.modifiers?.some(mod => 
+                    mod.kind === SyntaxKind.ExportKeyword
+                  );
+    
+                  if (!hasExportModifier) {
+                    const exportModifier = factory.createModifier(SyntaxKind.ExportKeyword);
+                    const existingModifiers = node.modifiers || [];
+                    const newModifiers = [exportModifier, ...existingModifiers];
+                    
                     return factory.updateModuleDeclaration(
                       node,
                       newModifiers,
@@ -305,30 +364,46 @@ export class Typescript implements ILanguage {
                   }
                 }
               }
+              
+              // For other nodes or already exported declarations, visit their children
+              return visitEachChild(node, visit, context);
             }
-
-            // For other nodes or already exported declarations, just visit their children
-            return visitEachChild(node, visit, context);
-          }
-
-          return visitNode(rootNode, visit) as SourceFile;
+            
+            return visitNode(rootNode, visit) as SourceFile;
+          };
         };
-      };
-
-      // Apply the transformation
-      const result = transform(sourceFile, [transformer]);
-      const transformedSourceFile = result.transformed[0];
-
-      // Convert the transformed AST back to source text
-      const newSourceText = printer.printFile(transformedSourceFile as SourceFile);
-
-      // Write the modified source back to the file
-      await promises.writeFile(filePath, newSourceText, 'utf-8');
-
-      // Clean up
-      result.dispose();
-
-      console.log(`Successfully processed and exported all declarations in: ${filePath}`);
+    
+        try {
+          // Apply the transformation
+          const result = transform(sourceFile, [transformer]);
+          if (!result || !result.transformed || result.transformed.length === 0) {
+            throw new Error('Transformation resulted in no output');
+          }
+          
+          const transformedSourceFile = result.transformed[0];
+          
+          // Convert the transformed AST back to source text
+          const newSourceText = printer.printFile(transformedSourceFile as SourceFile);
+          
+          if (!newSourceText || newSourceText.trim().length === 0) {
+            throw new Error('Transformation resulted in empty file');
+          }
+          
+          // Write the modified source back to the file
+          await promises.writeFile(filePath, newSourceText, 'utf-8');
+          
+          // Clean up
+          result.dispose();
+          
+          console.log(`Successfully processed and exported all declarations in: ${filePath}`);
+        } catch (transformError) {
+          console.error(`Error during transformation: ${(transformError as Error).message}`);
+          throw transformError;
+        }
+      } catch (error) {
+        console.error(`Error in exportAllDeclarations for ${filePath}: ${(error as Error).message}`);
+        throw error;
+      }
     }
 
     public fileEndings(): string[] {

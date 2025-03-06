@@ -85,28 +85,37 @@ ${functionCode}`;
             { role: 'user', content: userPrompt }
         ];
         
-        // Make the API call to Claude
-        const response = await this.claudeClient.messages.create({
-            model: this.config.model,
-            system: systemPrompt,
-            messages: conversation.messages,
-            max_tokens: 4000,
-        });
+        for (let i = 0; i < 3; i++) {
+            try {
+                // Make the API call to Claude
+                const response = await this.claudeClient.messages.create({
+                    model: this.config.model,
+                    system: systemPrompt,
+                    messages: conversation.messages,
+                    max_tokens: 4000,
+                });
         
-        // Extract the response text from Claude
-        let rawResponse = '';
-        for (const part of response.content) {
-            if (part.type === 'text') {
-                rawResponse += part.text;
+                // Extract the response text from Claude
+                let rawResponse = '';
+                for (const part of response.content) {
+                    if (part.type === 'text') {
+                        rawResponse += part.text;
+                    }
+                }
+        
+                const testBlocks = extractCodeBlocks(rawResponse);
+        
+                // Store Claude's response in our conversation history
+                conversation.messages.push({ role: 'assistant', content: rawResponse });
+        
+                return [testBlocks, null];
+            } catch (e) {
+                console.error('Failed to generate initial tests:', e);
+                await new Promise(resolve => setTimeout(resolve, 60000));
             }
         }
-        
-        const testBlocks = extractCodeBlocks(rawResponse);
-        
-        // Store Claude's response in our conversation history
-        conversation.messages.push({ role: 'assistant', content: rawResponse });
-        
-        return [testBlocks, null];
+
+        return [[""], new Error('Failed to generate initial tests')];
     }
 
     public async provideFeedback(conversationID: string, feedback: string): Promise<[Array<string>, Error | null]> {
@@ -125,30 +134,39 @@ ${functionCode}`;
         
         // System prompt for Claude
         const systemPrompt = `You are a helpful assistant that generates and revises unit tests for JavaScript/TypeScript code.`;
+
+        for (let i = 0; i < 3; i++) {
+            try {
+                // Make the API call to Claude with the full conversation history
+                const response = await this.claudeClient.messages.create({
+                    model: this.config.model,
+                    system: systemPrompt,
+                    messages: conversation.messages,
+                    temperature: 0.1,
+                    max_tokens: 16000,
+                });
         
-        // Make the API call to Claude with the full conversation history
-        const response = await this.claudeClient.messages.create({
-            model: this.config.model,
-            system: systemPrompt,
-            messages: conversation.messages,
-            temperature: 0.1,
-            max_tokens: 16000,
-        });
+                // Extract the response text from Claude
+                let rawResponse = '';
+                for (const part of response.content) {
+                    if (part.type === 'text') {
+                        rawResponse += part.text;
+                    }
+                }
         
-        // Extract the response text from Claude
-        let rawResponse = '';
-        for (const part of response.content) {
-            if (part.type === 'text') {
-                rawResponse += part.text;
+                const testBlocks = extractCodeBlocks(rawResponse);
+        
+                // Store Claude's response in our conversation history
+                conversation.messages.push({ role: 'assistant', content: rawResponse });
+        
+                return [testBlocks, null];
+            } catch (e) {
+                console.error('Failed to provide feedback:', e);
+                await new Promise(resolve => setTimeout(resolve, 60000));
             }
         }
-        
-        const testBlocks = extractCodeBlocks(rawResponse);
-        
-        // Store Claude's response in our conversation history
-        conversation.messages.push({ role: 'assistant', content: rawResponse });
-        
-        return [testBlocks, null];
+
+        return [[""], new Error('Failed to provide feedback')];
     }
 
     private genRandomID(): string {

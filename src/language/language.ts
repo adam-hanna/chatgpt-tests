@@ -9,7 +9,7 @@ export type TExportedFunction = {
 }
 
 export interface ILanguage {
-    writeTestsToFile(functionName: string, testBlocks: string[], sourceFilePath: string): void;
+    writeTestsToFile(testFilePath: string, testBlocks: string[]): void;
     runTests(rootDir: string, testFilePath: string): Promise<{ success: boolean; results: string }>;
 
     fileEndings(): string[];

@@ -37,6 +37,7 @@ export const runCommand = async (config: TConfig): Promise<void> => {
     const files = getFilesRecursively(config.testDir);
     for (const file of files) {
         if (config.export) {
+            console.log(`Exporting all declarations in file: ${file}`);
             await config.languageSvc.exportAllDeclarations(file);
         }
 
@@ -84,7 +85,7 @@ export const runCommand = async (config: TConfig): Promise<void> => {
                             throw initialTestsErr;
                         }
 
-                        config.languageSvc.writeTestsToFile(func.functionName, initialTests, file); // Save initial tests
+                        config.languageSvc.writeTestsToFile(testFilePath, initialTests); // Save initial tests
                     }
 
                     const { success, results } = await config.languageSvc.runTests(config.rootDir, testFilePath);
@@ -94,7 +95,7 @@ export const runCommand = async (config: TConfig): Promise<void> => {
                     } else {
                         console.error('Tests failed');
                         const [revisedTests, err] = await config.aiSvc.provideFeedback(chatId, results);
-                        config.languageSvc.writeTestsToFile(func.functionName, revisedTests, file); // Save revised tests
+                        config.languageSvc.writeTestsToFile(testFilePath, revisedTests); // Save revised tests
                     }
                 } catch (error) {
                     console.error(`Error processing function ${func.functionName}:`, error);

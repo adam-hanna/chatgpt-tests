@@ -25,19 +25,35 @@ export class CLI {
         });
     }
 
+    private parseInteger(value: string): number {
+        // Parse the string value to an integer
+        const parsedValue = parseInt(value, 10);
+        
+        // Check if the parsed value is a valid number
+        if (isNaN(parsedValue)) {
+            throw new Error(`Not a valid number: ${value}`);
+        }
+        
+        return parsedValue;
+    }
+
     private setupCommands() {
         this.program
             .command('run <testDir>')
             .description('Run the CLI with specified options')
-            .option('--maxTries <number>', 'Maximum number of tries', parseInt, 5)
+            .option('--maxTries <number>', 'Maximum number of tries', this.parseInteger, 5)
             .option('--model <string>', 'Model to use', 'claude-3-7-sonnet-20250219')
             .option('--ai <string>', 'AI to use (chatGPT or claude)', 'claude')
             .option('--rootDir <string>', 'Root directory', './')
             .option('--language <string>', 'Coding language', 'typescript')
-            .option('--sleep <number>', 'Sleep time between api calls (ms)', parseInt, 1000)
+            .option('--sleep <number>', 'Sleep time between api calls (ms)', this.parseInteger, 1000)
             .option('--export', 'Modify the sourcefile to export all top level declarations?', false)
             .action(async (testDir, options) => {
                 try {
+                    // Log command line arguments for debugging
+                    //console.log('Command line arguments:', process.argv);
+                    //console.log('Parsed options:', options);
+                    
                     const cfgSvc = new Config();
                     const [_, configOK] = await cfgSvc.fetchConfig();
                     if (!configOK) {
@@ -81,7 +97,8 @@ export class CLI {
                         sleep: options.sleep,
                         export: options.export,
                     };
-                    await runCommand(config)
+                    
+                    await runCommand(config);
                 } catch (error) {
                     console.error('Error running command:', error);
                 }
