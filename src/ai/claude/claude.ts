@@ -162,7 +162,13 @@ ${functionCode}`;
                 return [testBlocks, null];
             } catch (e) {
                 console.error('Failed to provide feedback:', e);
-                await new Promise(resolve => setTimeout(resolve, 60000));
+                if (String(e).includes('prompt is too long')) {
+                    conversation.messages.splice(conversation.messages.length - 2, 1);
+                    this.conversations[conversationID] = conversation;
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+                } else if (String(e).includes('rate_limit_error')) {
+                    await new Promise(resolve => setTimeout(resolve, 60000));
+                }
             }
         }
 
