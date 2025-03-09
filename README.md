@@ -25,10 +25,12 @@ Run the CLI with specified options
 
 Options:
   --maxTries <number>  Maximum number of tries (default: 5)
-  --model <string>     Model to use (default: "o1-mini")
-  --ai <string>        AI to use (default: "chatGPT, claude")
+  --model <string>     Model to use (default: "claude-3-7-sonnet-20250219")
+  --ai <string>        AI to use (chatGPT or claude) (default: "claude")
   --rootDir <string>   Root directory (default: "./")
   --language <string>  Coding language (default: "typescript")
+  --sleep <number>     Sleep time between api calls (ms) (default: 1000)
+  --export             Modify the sourcefile to export all top level declarations? (default: false)
   -h, --help           display help for command
 
 $ npm run dev -- run ./examples \
