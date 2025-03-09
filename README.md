@@ -1,10 +1,8 @@
-# ChatGPT Tests
+# AI Automated Unit Tests
 
-Use ChatGPT to write your unit tests!
+Use AI to write your unit tests! Presently supports chatGPT and claude.
 
-Recursively searches through the provided directory looking for `.js` and `.ts` files.
-
-Presently, it only tests exported functions. It creates one file per exported function in the same directory.
+Recursively searches through the provided directory looking for `.js` and `.ts` files. It then tests any exported functions or exported classes with public methods. It creates one file per instance in the same directory.
 
 ## Usage
 
@@ -30,7 +28,7 @@ Options:
   --rootDir <string>   Root directory (default: "./")
   --language <string>  Coding language (default: "typescript")
   --sleep <number>     Sleep time between api calls (ms) (default: 1000)
-  --export             Modify the sourcefile to export all top level declarations? (default: false)
+  --export             Modify the sourcefile to export all top level declarations (default: false)
   -h, --help           display help for command
 
 $ npm run dev -- run ./examples \

@@ -47,7 +47,7 @@ export class CLI {
             .option('--rootDir <string>', 'Root directory', './')
             .option('--language <string>', 'Coding language', 'typescript')
             .option('--sleep <number>', 'Sleep time between api calls (ms)', this.parseInteger, 1000)
-            .option('--export', 'Modify the sourcefile to export all top level declarations?', false)
+            .option('--export', 'Modify the sourcefile to export all top level declarations', false)
             .action(async (testDir, options) => {
                 try {
                     // Log command line arguments for debugging
