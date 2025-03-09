@@ -2,7 +2,7 @@ import { exec } from 'child_process';
 import { basename, dirname, extname, join, resolve } from 'path';
 import { existsSync, openSync, promises, readFileSync, writeFileSync } from 'fs';
 import { DirResult, dirSync } from 'tmp';
-import { createSourceFile, ScriptTarget, Node, isFunctionDeclaration, isClassDeclaration, isInterfaceDeclaration, isEnumDeclaration, isVariableStatement, SyntaxKind, isVariableDeclaration, isIdentifier, isArrowFunction, isFunctionExpression, forEachChild, StringLiteral, isImportDeclaration, isImportEqualsDeclaration, isExternalModuleReference, isStringLiteral, isCallExpression, createProgram, FunctionLikeDeclarationBase, isMethodDeclaration, TypeChecker, isBlock, isTypeAliasDeclaration, createPrinter, NewLineKind, TransformationContext, SourceFile, isSourceFile, isModuleDeclaration, factory, visitEachChild, visitNode, transform, VariableStatement, TransformerFactory } from 'typescript';
+import { createSourceFile, ScriptTarget, Node, isFunctionDeclaration, isClassDeclaration, isInterfaceDeclaration, isEnumDeclaration, isVariableStatement, SyntaxKind, isVariableDeclaration, isIdentifier, isArrowFunction, isFunctionExpression, forEachChild, StringLiteral, isImportDeclaration, isImportEqualsDeclaration, isExternalModuleReference, isStringLiteral, isCallExpression, createProgram, FunctionLikeDeclarationBase, isMethodDeclaration, TypeChecker, isBlock, isTypeAliasDeclaration, createPrinter, NewLineKind, TransformationContext, SourceFile, isSourceFile, isModuleDeclaration, factory, visitEachChild, visitNode, transform, VariableStatement, TransformerFactory, VariableDeclaration, isComputedPropertyName } from 'typescript';
 
 import { ILanguage, TExportedFunction, TLanguage } from '@/src/language';
 
@@ -84,7 +84,7 @@ export class Typescript implements ILanguage {
                 importStatements.push(getNodeText(node));
             } else if (
                 isVariableStatement(node) &&
-                node.declarationList.declarations.some(decl =>
+                node.declarationList.declarations.some((decl: VariableDeclaration) =>
                     isVariableDeclaration(decl) &&
                     decl.initializer &&
                     isCallExpression(decl.initializer) &&
@@ -142,6 +142,49 @@ export class Typescript implements ILanguage {
                         }
                     }
                 }
+            }
+
+            // Collect public methods from exported classes
+            if (
+                isClassDeclaration(node) &&
+                node.modifiers?.some(modifier => modifier.kind === SyntaxKind.ExportKeyword) &&
+                node.name
+            ) {
+                const classCode = getNodeText(node);
+                
+                // Find all public methods in the class
+                node.members.forEach(member => {
+                    if (isMethodDeclaration(member) && member.name) {
+                        // Check if method is public (either explicitly or implicitly)
+                        const isPublic = !member.modifiers || 
+                            member.modifiers.some(mod => mod.kind === SyntaxKind.PublicKeyword) ||
+                            !member.modifiers.some(mod => 
+                                mod.kind === SyntaxKind.PrivateKeyword || 
+                                mod.kind === SyntaxKind.ProtectedKeyword
+                            );
+
+                        if (isPublic) {
+                            let methodName = '';
+                            
+                            if (isIdentifier(member.name)) {
+                                methodName = member.name.text;
+                            } else if (isStringLiteral(member.name)) {
+                                methodName = member.name.text;
+                            } else if (isComputedPropertyName(member.name) && 
+                                      isStringLiteral(member.name.expression)) {
+                                methodName = member.name.expression.text;
+                            }
+
+                            if (methodName) {
+                                exportedFunctions.push({
+                                    functionName: methodName,
+                                    functionCode: classCode,
+                                    functionTypes: [], // Will be filled in later
+                                });
+                            }
+                        }
+                    }
+                });
             }
 
             forEachChild(node, collectExportedFunctions);
